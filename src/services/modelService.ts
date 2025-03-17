@@ -3,7 +3,7 @@ import * as tf from '@tensorflow/tfjs';
 import { useToast } from '@/hooks/use-toast';
 
 // Model constants
-const MODEL_URL = 'https://storage.googleapis.com/tfjs-models/savedmodel/'; // Replace with your actual model URL
+const MODEL_URL = 'https://raw.githubusercontent.com/Ashulovesmaa2003/brain-tumor-json-file/main/model.json';
 const IMAGE_SIZE = 224; // DeepLab typically uses 224x224 or 512x512 images
 
 class ModelService {
@@ -129,7 +129,10 @@ class ModelService {
       [0, 0, 255, 192]    // Class 3 (blue, semi-transparent)
     ];
     
-    for (let i = 0; i < flatSegmentationData.length; i++) {
+    // Fix: Ensure flatSegmentationData is treated as an array
+    const dataLength = Array.isArray(flatSegmentationData) ? flatSegmentationData.length : 0;
+    
+    for (let i = 0; i < dataLength; i++) {
       const pixelClass = flatSegmentationData[i];
       const color = colorMap[pixelClass] || [0, 0, 0, 0];
       
