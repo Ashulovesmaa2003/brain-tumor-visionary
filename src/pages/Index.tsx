@@ -5,6 +5,7 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import Hero from '@/components/home/Hero';
 import Features from '@/components/home/Features';
+import HowItWorks from '@/components/home/HowItWorks';
 
 const Index = () => {
   // Scroll to top when page loads
@@ -24,6 +25,7 @@ const Index = () => {
       <main className="flex-grow">
         <Hero />
         <Features />
+        <HowItWorks />
       </main>
       <Footer />
     </motion.div>
