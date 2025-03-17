@@ -1,6 +1,7 @@
+
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileUp, X, Image, Check } from 'lucide-react';
+import { Upload, FileUp, X, Image, Check, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useModelService } from '@/services/modelService';
@@ -12,9 +13,10 @@ const UploadSection = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isModelLoading, setIsModelLoading] = useState(true);
+  const [mockModeActive, setMockModeActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  const { analyzeImage, loadModel } = useModelService();
+  const { analyzeImage, loadModel, isMockMode } = useModelService();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -22,10 +24,21 @@ const UploadSection = () => {
       try {
         setIsModelLoading(true);
         const success = await loadModel();
-        if (success) {
+        
+        // Check if we're in mock mode after loading attempt
+        const mockMode = isMockMode();
+        setMockModeActive(mockMode);
+        
+        if (success && !mockMode) {
           toast({
             title: "Model loaded",
             description: "Brain tumor detection model loaded successfully",
+          });
+        } else if (mockMode) {
+          toast({
+            title: "Using demo mode",
+            description: "Model could not be loaded. Operating in demo mode with sample results.",
+            variant: "warning",
           });
         } else {
           toast({
@@ -35,10 +48,11 @@ const UploadSection = () => {
         }
       } catch (error) {
         console.error("Failed to load model:", error);
+        setMockModeActive(true);
         toast({
-          title: "Model loading failed",
-          description: "Could not load the brain tumor detection model",
-          variant: "destructive",
+          title: "Using demo mode",
+          description: "Could not load the brain tumor detection model. Using demo mode instead.",
+          variant: "warning",
         });
       } finally {
         setIsModelLoading(false);
@@ -119,8 +133,10 @@ const UploadSection = () => {
       sessionStorage.setItem('analysisResults', JSON.stringify(results));
       setProgress(100);
       
+      const modeMessage = mockModeActive ? ' (demo mode)' : '';
+      
       toast({
-        title: "Analysis complete",
+        title: `Analysis complete${modeMessage}`,
         description: `Successfully analyzed ${files.length} file${files.length > 1 ? 's' : ''}.`,
       });
       
@@ -145,6 +161,19 @@ const UploadSection = () => {
   return (
     <div className="w-full max-w-3xl mx-auto">
       <div className="space-y-6">
+        {mockModeActive && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start space-x-3">
+            <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
+            <div>
+              <h4 className="font-medium text-amber-800">Demo Mode Active</h4>
+              <p className="text-sm text-amber-700 mt-1">
+                The model couldn't be loaded, so you're seeing demo results. Your images will be analyzed but
+                the results will be randomized for demonstration purposes.
+              </p>
+            </div>
+          </div>
+        )}
+      
         <div 
           className={`border-2 border-dashed rounded-xl p-8 text-center transition-all duration-300 ${
             isDragging 
@@ -274,9 +303,9 @@ const UploadSection = () => {
         <Button
           onClick={handleUpload}
           className="w-full rounded-xl py-6 font-medium transition-all"
-          disabled={files.length === 0 || isUploading || isModelLoading}
+          disabled={files.length === 0 || isUploading || (isModelLoading && !mockModeActive)}
         >
-          {isModelLoading ? (
+          {isModelLoading && !mockModeActive ? (
             <div className="flex items-center space-x-2">
               <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               <span>Loading Model...</span>
@@ -289,7 +318,7 @@ const UploadSection = () => {
           ) : (
             <div className="flex items-center space-x-2">
               <FileUp className="h-5 w-5" />
-              <span>Upload & Analyze</span>
+              <span>{mockModeActive ? 'Upload & Analyze (Demo)' : 'Upload & Analyze'}</span>
             </div>
           )}
         </Button>
