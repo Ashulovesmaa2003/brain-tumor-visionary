@@ -74,35 +74,47 @@ class ModelService {
       }
     }
 
-    return tf.tidy(() => {
-      // Preprocess the image
-      const input = this.preprocessImage(imageElement);
-      
+    // Process input image using tf.tidy()
+    const input = this.preprocessImage(imageElement);
+    
+    try {
       // Run the model
       const outputTensor = this.model!.predict(input) as tf.Tensor;
       
-      // Process the model output (specific to DeepLab)
+      // Process the model output
       const segmentationMap = outputTensor.argMax(-1);
       
       // Create a visualization of the segmentation
-      const coloredSegmentation = this.createColoredSegmentation(segmentationMap);
+      const coloredSegmentation = await this.createColoredSegmentation(segmentationMap);
       
-      // Get the tumor type and confidence based on the segmentation result
+      // Get the tumor type and confidence
       const { tumorType, confidence } = this.analyzeTumorType(outputTensor);
+      
+      // Clean up tensors
+      tf.dispose([input, outputTensor, segmentationMap]);
       
       return {
         prediction: tumorType,
         confidence: confidence,
         segmentation: coloredSegmentation
       };
-    });
+    } catch (error) {
+      // Clean up tensors on error
+      tf.dispose(input);
+      throw error;
+    }
   }
 
   // Create a colored visualization of the segmentation map
-  private createColoredSegmentation(segmentationMap: tf.Tensor): ImageData {
-    // Convert the segmentation map to an image
+  private async createColoredSegmentation(segmentationMap: tf.Tensor): Promise<ImageData> {
+    // Get dimensions and data
     const [height, width] = segmentationMap.shape.slice(1);
-    const segmentationData = segmentationMap.dataSync();
+    const segmentationData = await segmentationMap.array();
+    
+    // Flatten segmentation data if it's a multi-dimensional array
+    const flatSegmentationData = Array.isArray(segmentationData[0]) 
+      ? segmentationData[0] 
+      : segmentationData;
     
     // Create a colored image (RGBA)
     const imageData = new ImageData(width, height);
@@ -117,8 +129,8 @@ class ModelService {
       [0, 0, 255, 192]    // Class 3 (blue, semi-transparent)
     ];
     
-    for (let i = 0; i < segmentationData.length; i++) {
-      const pixelClass = segmentationData[i];
+    for (let i = 0; i < flatSegmentationData.length; i++) {
+      const pixelClass = flatSegmentationData[i];
       const color = colorMap[pixelClass] || [0, 0, 0, 0];
       
       data[i * 4] = color[0];     // R
@@ -132,9 +144,6 @@ class ModelService {
 
   // Analyze the model output to determine tumor type and confidence
   private analyzeTumorType(output: tf.Tensor): { tumorType: string; confidence: number } {
-    // For DeepLab, we need to analyze the segmentation map
-    // This is a simplified example - actual implementation depends on your model's output format
-    
     // Get class probabilities
     const probabilities = output.softmax().dataSync();
     
