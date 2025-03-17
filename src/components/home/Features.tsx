@@ -9,7 +9,7 @@ import {
   Cloud, 
   Lock, 
   History, 
-  HospitalSquare, 
+  Building, 
   Scale,
   Mail
 } from 'lucide-react';
@@ -55,7 +55,7 @@ const Features = () => {
       description: "Access and review historical diagnosis results anytime.",
     },
     {
-      icon: <HospitalSquare className="h-6 w-6" />,
+      icon: <Building className="h-6 w-6" />,
       title: "Hospital Integration",
       description: "Connects with PACS/EHR to retrieve MRI images directly.",
     },
