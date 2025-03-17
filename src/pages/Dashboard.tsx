@@ -1,13 +1,24 @@
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import UploadSection from '@/components/upload/UploadSection';
 import ResultsCard from '@/components/results/ResultsCard';
+import { useLocation } from 'react-router-dom';
 
 const Dashboard = () => {
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState('upload');
+  
+  // Handle default tab selection from navigation
+  useEffect(() => {
+    if (location.state && location.state.defaultTab) {
+      setActiveTab(location.state.defaultTab);
+    }
+  }, [location]);
+
   // Scroll to top when page loads
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -31,7 +42,7 @@ const Dashboard = () => {
             </p>
           </div>
           
-          <Tabs defaultValue="upload" className="max-w-3xl mx-auto">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="max-w-3xl mx-auto">
             <TabsList className="grid w-full grid-cols-2 mb-8">
               <TabsTrigger value="upload">Upload</TabsTrigger>
               <TabsTrigger value="results">Results</TabsTrigger>

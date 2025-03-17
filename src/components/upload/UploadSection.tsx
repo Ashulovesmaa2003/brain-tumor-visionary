@@ -1,17 +1,52 @@
-
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileUp, X, Image, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { useModelService } from '@/services/modelService';
+import { useNavigate } from 'react-router-dom';
 
 const UploadSection = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [isModelLoading, setIsModelLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { analyzeImage, loadModel } = useModelService();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const initModel = async () => {
+      try {
+        setIsModelLoading(true);
+        const success = await loadModel();
+        if (success) {
+          toast({
+            title: "Model loaded",
+            description: "Brain tumor detection model loaded successfully",
+          });
+        } else {
+          toast({
+            title: "Model loading delayed",
+            description: "Still loading the model, please wait a moment",
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load model:", error);
+        toast({
+          title: "Model loading failed",
+          description: "Could not load the brain tumor detection model",
+          variant: "destructive",
+        });
+      } finally {
+        setIsModelLoading(false);
+      }
+    };
+
+    initModel();
+  }, []);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -38,7 +73,6 @@ const UploadSection = () => {
   };
 
   const handleFiles = (newFiles: File[]) => {
-    // Only accept image files
     const imageFiles = newFiles.filter(file => file.type.startsWith('image/'));
     
     if (imageFiles.length !== newFiles.length) {
@@ -56,7 +90,7 @@ const UploadSection = () => {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (files.length === 0) {
       toast({
         title: "No files selected",
@@ -67,26 +101,45 @@ const UploadSection = () => {
     }
 
     setIsUploading(true);
+    setProgress(0);
     
-    // Simulate upload progress
-    let currentProgress = 0;
-    const interval = setInterval(() => {
-      currentProgress += 5;
-      setProgress(currentProgress);
+    try {
+      const results = [];
+      const totalFiles = files.length;
       
-      if (currentProgress >= 100) {
-        clearInterval(interval);
-        setTimeout(() => {
-          setIsUploading(false);
-          setProgress(0);
-          toast({
-            title: "Upload complete",
-            description: `Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''}.`,
-          });
-          // In a real app, we'd redirect to results page here
-        }, 500);
+      for (let i = 0; i < totalFiles; i++) {
+        setProgress(Math.round((i / totalFiles) * 90));
+        const result = await analyzeImage(files[i]);
+        results.push({
+          file: files[i],
+          ...result
+        });
       }
-    }, 150);
+      
+      sessionStorage.setItem('analysisResults', JSON.stringify(results));
+      setProgress(100);
+      
+      toast({
+        title: "Analysis complete",
+        description: `Successfully analyzed ${files.length} file${files.length > 1 ? 's' : ''}.`,
+      });
+      
+      setTimeout(() => {
+        navigate('/dashboard', { state: { defaultTab: 'results' } });
+        setIsUploading(false);
+        setProgress(0);
+      }, 500);
+      
+    } catch (error) {
+      console.error("Analysis failed:", error);
+      toast({
+        title: "Analysis failed",
+        description: "There was an error analyzing your images. Please try again.",
+        variant: "destructive",
+      });
+      setIsUploading(false);
+      setProgress(0);
+    }
   };
 
   return (
@@ -203,7 +256,7 @@ const UploadSection = () => {
               className="bg-card border rounded-xl p-4"
             >
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-sm">Uploading Files</h3>
+                <h3 className="font-medium text-sm">Analyzing Images</h3>
                 <p className="text-xs font-medium">{progress}%</p>
               </div>
               
@@ -221,12 +274,17 @@ const UploadSection = () => {
         <Button
           onClick={handleUpload}
           className="w-full rounded-xl py-6 font-medium transition-all"
-          disabled={files.length === 0 || isUploading}
+          disabled={files.length === 0 || isUploading || isModelLoading}
         >
-          {isUploading ? (
+          {isModelLoading ? (
             <div className="flex items-center space-x-2">
               <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              <span>Processing...</span>
+              <span>Loading Model...</span>
+            </div>
+          ) : isUploading ? (
+            <div className="flex items-center space-x-2">
+              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <span>Analyzing...</span>
             </div>
           ) : (
             <div className="flex items-center space-x-2">
