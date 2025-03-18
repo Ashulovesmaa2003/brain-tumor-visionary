@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileUp, X, Image, Check, AlertTriangle } from 'lucide-react';
@@ -38,7 +37,6 @@ const UploadSection = () => {
           toast({
             title: "Using demo mode",
             description: "Model could not be loaded. Operating in demo mode with sample results.",
-            // Fix for TypeScript error - changed from "warning" to "destructive"
             variant: "destructive",
           });
         } else {
@@ -53,7 +51,6 @@ const UploadSection = () => {
         toast({
           title: "Using demo mode",
           description: "Could not load the brain tumor detection model. Using demo mode instead.",
-          // Fix for TypeScript error - changed from "warning" to "destructive"
           variant: "destructive",
         });
       } finally {

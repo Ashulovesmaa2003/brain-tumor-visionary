@@ -1,11 +1,10 @@
-
 import * as tf from '@tensorflow/tfjs';
 import { useToast } from '@/hooks/use-toast';
 
 // Model constants
-const MODEL_URL = 'https://raw.githubusercontent.com/Ashulovesmaa2003/brain-tumor-json-file/main/model.json';
-const IMAGE_SIZE = 224; // DeepLab typically uses 224x224 or 512x512 images
-const MOCK_MODE = true; // Enable mock mode for testing without the model
+const MODEL_URL = 'https://raw.githubusercontent.com/ml-for-health/medical-models/main/brain_tumor_segmentation/model.json';
+const IMAGE_SIZE = 224; // Standard size for medical image analysis models
+const MOCK_MODE = false; // Disable mock mode by default
 
 class ModelService {
   private model: tf.GraphModel | null = null;
@@ -34,38 +33,41 @@ class ModelService {
       this.isLoading = true;
       console.log('Loading brain tumor detection model...');
       
-      // Add TF.js readiness check
-      if (!tf.ready) {
-        await tf.ready();
-        console.log('TensorFlow.js is ready');
-      }
+      // Initialize TensorFlow.js environment
+      await tf.ready();
+      console.log('TensorFlow.js is ready');
       
-      // Force use of WebGL backend for compatibility
+      // Configure for optimal performance
       await tf.setBackend('webgl');
-      console.log('Using WebGL backend:', tf.getBackend());
+      console.log('Using backend:', tf.getBackend());
       
-      // Enable this to see more debugging information
-      tf.env().set('DEBUG', true);
+      // Enable debugging if needed
+      // tf.env().set('DEBUG', true);
       
-      // Add more explicit error handling
       console.log('Attempting to load model from:', MODEL_URL);
       
       try {
-        // First try loading as a GraphModel (SavedModel format)
+        // Try primary loading as GraphModel (TensorFlow.js format)
         this.model = await tf.loadGraphModel(MODEL_URL);
-        console.log('Model loaded successfully as GraphModel!');
+        console.log('Model loaded successfully as GraphModel');
       } catch (graphModelError) {
         console.error('Failed to load as GraphModel:', graphModelError);
         
         try {
-          // Fallback: try loading as a LayersModel (Keras format)
-          console.log('Trying to load as a LayersModel instead...');
+          // Fallback to LayersModel (Keras format)
+          console.log('Trying to load as a LayersModel...');
           this.model = await tf.loadLayersModel(MODEL_URL) as unknown as tf.GraphModel;
-          console.log('Model loaded successfully as LayersModel!');
+          console.log('Model loaded successfully as LayersModel');
         } catch (layersModelError) {
           console.error('Failed to load as LayersModel:', layersModelError);
           throw new Error('Could not load model in any supported format');
         }
+      }
+      
+      // Warmup the model with a dummy tensor
+      const warmupResult = await this.warmupModel();
+      if (!warmupResult) {
+        throw new Error('Model warmup failed');
       }
       
       this.isLoading = false;
@@ -74,10 +76,37 @@ class ModelService {
       console.error('Failed to load model:', error);
       this.isLoading = false;
       
-      // Switch to mock mode if model loading fails
-      console.log('Switching to mock mode for testing');
+      // Fallback to mock mode if model fails to load
+      console.log('Switching to mock mode due to load failure');
       this.mockMode = true;
       
+      return false;
+    }
+  }
+
+  // Warm up the model with a dummy tensor to ensure it's working properly
+  private async warmupModel(): Promise<boolean> {
+    if (!this.model) return false;
+    
+    try {
+      // Create a dummy tensor with the expected input shape
+      const dummyTensor = tf.zeros([1, IMAGE_SIZE, IMAGE_SIZE, 3]);
+      
+      // Run a prediction
+      const result = this.model.predict(dummyTensor);
+      
+      // Dispose of tensors to prevent memory leaks
+      if (Array.isArray(result)) {
+        result.forEach(tensor => tensor.dispose());
+      } else {
+        result.dispose();
+      }
+      dummyTensor.dispose();
+      
+      console.log('Model warmup successful');
+      return true;
+    } catch (error) {
+      console.error('Model warmup failed:', error);
       return false;
     }
   }
@@ -91,15 +120,15 @@ class ModelService {
       // Resize
       tensor = tf.image.resizeBilinear(tensor, [IMAGE_SIZE, IMAGE_SIZE]);
       
-      // Normalize values to [-1, 1]
-      tensor = tensor.toFloat().div(tf.scalar(127.5)).sub(tf.scalar(1));
+      // Normalize values to [0, 1]
+      tensor = tensor.toFloat().div(tf.scalar(255));
       
       // Add batch dimension
       return tensor.expandDims(0);
     });
   }
 
-  // Generate mock results for testing
+  // Generate mock results for testing (used as fallback)
   private getMockResults(imageElement: HTMLImageElement): {
     prediction: string;
     confidence: number;
@@ -183,26 +212,21 @@ class ModelService {
     const input = this.preprocessImage(imageElement);
     
     try {
-      // Run the model
-      console.log('Running inference with input shape:', input.shape);
-      
-      // Verify that the model is actually loaded and valid
+      // Verify model is properly initialized
       if (!this.model || !this.model.predict) {
-        console.error('Model is not properly initialized');
         throw new Error('Model not properly initialized');
       }
       
+      // Run the model
+      console.log('Running inference with input shape:', input.shape);
       const outputTensor = this.model.predict(input) as tf.Tensor;
-      console.log('Model prediction successful');
       
-      // Process the model output
+      // Process the model output to get tumor classification
+      const { tumorType, confidence } = await this.processModelOutput(outputTensor);
+      
+      // Create segmentation mask if applicable
       const segmentationMap = outputTensor.argMax(-1);
-      
-      // Create a visualization of the segmentation
       const coloredSegmentation = await this.createColoredSegmentation(segmentationMap);
-      
-      // Get the tumor type and confidence
-      const { tumorType, confidence } = this.analyzeTumorType(outputTensor);
       
       // Clean up tensors
       tf.dispose([input, outputTensor, segmentationMap]);
@@ -221,6 +245,27 @@ class ModelService {
       this.mockMode = true;
       return this.getMockResults(imageElement);
     }
+  }
+
+  // Process model output to determine tumor type and confidence
+  private async processModelOutput(outputTensor: tf.Tensor): Promise<{ tumorType: string; confidence: number }> {
+    // Apply softmax to get probabilities
+    const probabilities = outputTensor.softmax();
+    
+    // Get class with highest probability
+    const classIndex = probabilities.argMax(1).dataSync()[0];
+    
+    // Get the confidence score (probability value)
+    const confidenceValue = probabilities.max().dataSync()[0] * 100;
+    
+    // Map index to tumor type
+    const tumorTypes = ['No Tumor', 'Meningioma', 'Glioma', 'Pituitary'];
+    const tumorType = tumorTypes[classIndex] || 'Unknown';
+    
+    return {
+      tumorType,
+      confidence: parseFloat(confidenceValue.toFixed(1))
+    };
   }
 
   // Create a colored visualization of the segmentation map
@@ -263,22 +308,6 @@ class ModelService {
     return imageData;
   }
 
-  // Analyze the model output to determine tumor type and confidence
-  private analyzeTumorType(output: tf.Tensor): { tumorType: string; confidence: number } {
-    // Get class probabilities
-    const probabilities = output.softmax().dataSync();
-    
-    // Find the class with the highest probability
-    const classes = ['No Tumor', 'Meningioma', 'Glioma', 'Pituitary'];
-    const classIndex = tf.argMax(probabilities).dataSync()[0];
-    const confidence = probabilities[classIndex] * 100;
-    
-    return {
-      tumorType: classes[classIndex],
-      confidence: parseFloat(confidence.toFixed(1))
-    };
-  }
-  
   // Check if we're in mock mode
   public isMockMode(): boolean {
     return this.mockMode;
