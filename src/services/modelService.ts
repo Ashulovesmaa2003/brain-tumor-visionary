@@ -1,6 +1,6 @@
 
-import modelService from './ModelService';
+import ModelService from './ModelService';
 import { useModelService } from './useModelService';
 
 export { useModelService };
-export default modelService;
+export default ModelService;

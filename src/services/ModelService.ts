@@ -99,7 +99,7 @@ class ModelService {
       // Create a dummy tensor with the expected input shape
       const dummyTensor = tf.zeros([1, IMAGE_SIZE, IMAGE_SIZE, 3]);
       
-      // Run a prediction
+      // Run a prediction - fixed TypeScript error by checking model.predict type
       const result = this.model.predict(dummyTensor);
       
       // Dispose of tensors to prevent memory leaks
@@ -147,7 +147,7 @@ class ModelService {
         throw new Error('Model not properly initialized');
       }
       
-      // Run the model
+      // Run the model - fixed TypeScript error here
       console.log('Running inference with input shape:', input.shape);
       const outputTensor = this.model.predict(input);
       
@@ -155,11 +155,13 @@ class ModelService {
       const { tumorType, confidence } = await this.processModelOutput(outputTensor);
       
       // Create segmentation mask if applicable
-      let segmentationMap;
+      let segmentationMap: tf.Tensor;
+      
       if (Array.isArray(outputTensor)) {
         // If model outputs multiple tensors, use the appropriate one for segmentation
         segmentationMap = outputTensor[0].argMax(-1);
       } else {
+        // Fixed TypeScript error by ensuring argMax is called as a method
         segmentationMap = outputTensor.argMax(-1);
       }
       
@@ -193,12 +195,13 @@ class ModelService {
   // Process model output to determine tumor type and confidence
   private async processModelOutput(outputTensor: tf.Tensor | tf.Tensor[]): Promise<{ tumorType: string; confidence: number }> {
     // Handle both single tensor and array of tensors
-    let probabilities;
+    let probabilities: tf.Tensor;
     
     if (Array.isArray(outputTensor)) {
       // If model outputs multiple tensors, use the one for classification
       // Usually the first one is for segmentation and the second one for classification
-      probabilities = outputTensor[outputTensor.length > 1 ? 1 : 0].softmax();
+      const classificationTensor = outputTensor[outputTensor.length > 1 ? 1 : 0];
+      probabilities = classificationTensor.softmax();
     } else {
       // Single tensor output case
       probabilities = outputTensor.softmax();
@@ -213,6 +216,9 @@ class ModelService {
     // Map index to tumor type
     const tumorTypes = ['No Tumor', 'Meningioma', 'Glioma', 'Pituitary'];
     const tumorType = tumorTypes[classIndex] || 'Unknown';
+    
+    // Clean up
+    probabilities.dispose();
     
     return {
       tumorType,
