@@ -1,3 +1,4 @@
+
 import * as tf from '@tensorflow/tfjs';
 import { useToast } from '@/hooks/use-toast';
 
@@ -217,19 +218,33 @@ class ModelService {
         throw new Error('Model not properly initialized');
       }
       
-      // Run the model
+      // Run the model - Fix: This is where the error is happening
       console.log('Running inference with input shape:', input.shape);
-      const outputTensor = this.model.predict(input) as tf.Tensor;
+      const outputTensor = this.model.predict(input);
       
       // Process the model output to get tumor classification
       const { tumorType, confidence } = await this.processModelOutput(outputTensor);
       
       // Create segmentation mask if applicable
-      const segmentationMap = outputTensor.argMax(-1);
+      // Fix: Handle outputTensor properly based on its type
+      let segmentationMap;
+      if (Array.isArray(outputTensor)) {
+        // If model outputs multiple tensors, use the appropriate one for segmentation
+        segmentationMap = outputTensor[0].argMax(-1);
+      } else {
+        segmentationMap = outputTensor.argMax(-1);
+      }
+      
       const coloredSegmentation = await this.createColoredSegmentation(segmentationMap);
       
       // Clean up tensors
-      tf.dispose([input, outputTensor, segmentationMap]);
+      if (Array.isArray(outputTensor)) {
+        outputTensor.forEach(tensor => tensor.dispose());
+      } else {
+        outputTensor.dispose();
+      }
+      input.dispose();
+      segmentationMap.dispose();
       
       return {
         prediction: tumorType,
@@ -248,9 +263,18 @@ class ModelService {
   }
 
   // Process model output to determine tumor type and confidence
-  private async processModelOutput(outputTensor: tf.Tensor): Promise<{ tumorType: string; confidence: number }> {
-    // Apply softmax to get probabilities
-    const probabilities = outputTensor.softmax();
+  private async processModelOutput(outputTensor: tf.Tensor | tf.Tensor[]): Promise<{ tumorType: string; confidence: number }> {
+    // Handle both single tensor and array of tensors
+    let probabilities;
+    
+    if (Array.isArray(outputTensor)) {
+      // If model outputs multiple tensors, use the one for classification
+      // Usually the first one is for segmentation and the second one for classification
+      probabilities = outputTensor[outputTensor.length > 1 ? 1 : 0].softmax();
+    } else {
+      // Single tensor output case
+      probabilities = outputTensor.softmax();
+    }
     
     // Get class with highest probability
     const classIndex = probabilities.argMax(1).dataSync()[0];
