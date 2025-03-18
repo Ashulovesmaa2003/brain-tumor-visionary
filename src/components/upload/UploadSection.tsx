@@ -38,7 +38,8 @@ const UploadSection = () => {
           toast({
             title: "Using demo mode",
             description: "Model could not be loaded. Operating in demo mode with sample results.",
-            variant: "warning",
+            // Fix for TypeScript error - changed from "warning" to "destructive"
+            variant: "destructive",
           });
         } else {
           toast({
@@ -52,7 +53,8 @@ const UploadSection = () => {
         toast({
           title: "Using demo mode",
           description: "Could not load the brain tumor detection model. Using demo mode instead.",
-          variant: "warning",
+          // Fix for TypeScript error - changed from "warning" to "destructive"
+          variant: "destructive",
         });
       } finally {
         setIsModelLoading(false);

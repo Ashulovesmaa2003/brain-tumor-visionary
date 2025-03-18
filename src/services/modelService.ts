@@ -34,10 +34,40 @@ class ModelService {
       this.isLoading = true;
       console.log('Loading brain tumor detection model...');
       
-      // Load the model
-      this.model = await tf.loadGraphModel(MODEL_URL);
+      // Add TF.js readiness check
+      if (!tf.ready) {
+        await tf.ready();
+        console.log('TensorFlow.js is ready');
+      }
       
-      console.log('Model loaded successfully!');
+      // Force use of WebGL backend for compatibility
+      await tf.setBackend('webgl');
+      console.log('Using WebGL backend:', tf.getBackend());
+      
+      // Enable this to see more debugging information
+      tf.env().set('DEBUG', true);
+      
+      // Add more explicit error handling
+      console.log('Attempting to load model from:', MODEL_URL);
+      
+      try {
+        // First try loading as a GraphModel (SavedModel format)
+        this.model = await tf.loadGraphModel(MODEL_URL);
+        console.log('Model loaded successfully as GraphModel!');
+      } catch (graphModelError) {
+        console.error('Failed to load as GraphModel:', graphModelError);
+        
+        try {
+          // Fallback: try loading as a LayersModel (Keras format)
+          console.log('Trying to load as a LayersModel instead...');
+          this.model = await tf.loadLayersModel(MODEL_URL) as unknown as tf.GraphModel;
+          console.log('Model loaded successfully as LayersModel!');
+        } catch (layersModelError) {
+          console.error('Failed to load as LayersModel:', layersModelError);
+          throw new Error('Could not load model in any supported format');
+        }
+      }
+      
       this.isLoading = false;
       return true;
     } catch (error) {
@@ -154,7 +184,16 @@ class ModelService {
     
     try {
       // Run the model
-      const outputTensor = this.model!.predict(input) as tf.Tensor;
+      console.log('Running inference with input shape:', input.shape);
+      
+      // Verify that the model is actually loaded and valid
+      if (!this.model || !this.model.predict) {
+        console.error('Model is not properly initialized');
+        throw new Error('Model not properly initialized');
+      }
+      
+      const outputTensor = this.model.predict(input) as tf.Tensor;
+      console.log('Model prediction successful');
       
       // Process the model output
       const segmentationMap = outputTensor.argMax(-1);
