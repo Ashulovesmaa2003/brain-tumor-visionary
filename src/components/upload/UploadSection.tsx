@@ -24,7 +24,6 @@ const UploadSection = () => {
         setIsModelLoading(true);
         const success = await loadModel();
         
-        // Check if we're in mock mode after loading attempt
         const mockMode = isMockMode();
         setMockModeActive(mockMode);
         
