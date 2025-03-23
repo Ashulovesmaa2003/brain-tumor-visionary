@@ -1,6 +1,6 @@
 
 import { useToast } from '@/hooks/use-toast';
-import modelService from './ModelService';
+import ModelService from './ModelService';
 
 // Hook for using model service in components
 export const useModelService = () => {
@@ -19,13 +19,13 @@ export const useModelService = () => {
       });
       
       // Run detection
-      const result = await modelService.detectTumor(img);
+      const result = await ModelService.detectTumor(img);
       
       // Clean up URL object
       URL.revokeObjectURL(imageUrl);
       
       // If in mock mode, let the user know
-      if (modelService.isMockMode()) {
+      if (ModelService.isMockMode()) {
         toast({
           title: 'Mock Results',
           description: 'Showing sample results as the model could not be loaded.',
@@ -47,7 +47,7 @@ export const useModelService = () => {
   
   return {
     analyzeImage,
-    loadModel: modelService.loadModel.bind(modelService),
-    isMockMode: modelService.isMockMode.bind(modelService),
+    loadModel: ModelService.loadModel.bind(ModelService),
+    isMockMode: ModelService.isMockMode.bind(ModelService),
   };
 };

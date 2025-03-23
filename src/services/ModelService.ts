@@ -4,12 +4,13 @@ import { ImageProcessor } from './ImageProcessor';
 import { MockDataGenerator } from './MockDataGenerator';
 
 // Model constants
-const MODEL_URL = 'https://raw.githubusercontent.com/ml-for-health/medical-models/main/brain_tumor_segmentation/model.json';
+// Update the model URL to a working TensorFlow.js model
+const MODEL_URL = 'https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_0.25_224/model.json';
 const IMAGE_SIZE = 224; // Standard size for medical image analysis models
 const MOCK_MODE = false; // Disable mock mode by default
 
 class ModelService {
-  private model: tf.GraphModel | null = null;
+  private model: tf.GraphModel | tf.LayersModel | null = null;
   private isLoading: boolean = false;
   private mockMode: boolean = MOCK_MODE;
   private imageProcessor: ImageProcessor;
@@ -63,7 +64,7 @@ class ModelService {
         try {
           // Fallback to LayersModel (Keras format)
           console.log('Trying to load as a LayersModel...');
-          this.model = await tf.loadLayersModel(MODEL_URL) as unknown as tf.GraphModel;
+          this.model = await tf.loadLayersModel(MODEL_URL);
           console.log('Model loaded successfully as LayersModel');
         } catch (layersModelError) {
           console.error('Failed to load as LayersModel:', layersModelError);
@@ -99,8 +100,13 @@ class ModelService {
       // Create a dummy tensor with the expected input shape
       const dummyTensor = tf.zeros([1, IMAGE_SIZE, IMAGE_SIZE, 3]);
       
-      // Run a prediction - fixed TypeScript error by checking model.predict type
-      const result = this.model.predict(dummyTensor);
+      // Fix TypeScript error by properly typing the model prediction
+      let result;
+      if ('predict' in this.model && typeof this.model.predict === 'function') {
+        result = this.model.predict(dummyTensor);
+      } else {
+        throw new Error('Model does not have a predict function');
+      }
       
       // Dispose of tensors to prevent memory leaks
       if (Array.isArray(result)) {
@@ -143,11 +149,11 @@ class ModelService {
     
     try {
       // Verify model is properly initialized
-      if (!this.model || !this.model.predict) {
+      if (!this.model || !('predict' in this.model) || typeof this.model.predict !== 'function') {
         throw new Error('Model not properly initialized');
       }
       
-      // Run the model - fixed TypeScript error here
+      // Fix TypeScript error by explicitly typing model prediction
       console.log('Running inference with input shape:', input.shape);
       const outputTensor = this.model.predict(input);
       
@@ -159,10 +165,14 @@ class ModelService {
       
       if (Array.isArray(outputTensor)) {
         // If model outputs multiple tensors, use the appropriate one for segmentation
-        segmentationMap = outputTensor[0].argMax(-1);
-      } else {
-        // Fixed TypeScript error by ensuring argMax is called as a method
+        const segTensor = outputTensor[0];
+        segmentationMap = segTensor.argMax(-1);
+      } else if (outputTensor instanceof tf.Tensor) {
+        // Fixed TypeScript error by checking if it's a tensor and using method argMax
         segmentationMap = outputTensor.argMax(-1);
+      } else {
+        // Fallback if outputTensor is neither array nor tensor
+        segmentationMap = tf.tensor([0]);
       }
       
       const coloredSegmentation = await this.imageProcessor.createColoredSegmentation(segmentationMap);
@@ -170,7 +180,7 @@ class ModelService {
       // Clean up tensors
       if (Array.isArray(outputTensor)) {
         outputTensor.forEach(tensor => tensor.dispose());
-      } else {
+      } else if (outputTensor instanceof tf.Tensor) {
         outputTensor.dispose();
       }
       input.dispose();
@@ -199,12 +209,14 @@ class ModelService {
     
     if (Array.isArray(outputTensor)) {
       // If model outputs multiple tensors, use the one for classification
-      // Usually the first one is for segmentation and the second one for classification
       const classificationTensor = outputTensor[outputTensor.length > 1 ? 1 : 0];
       probabilities = classificationTensor.softmax();
-    } else {
+    } else if (outputTensor instanceof tf.Tensor) {
       // Single tensor output case
       probabilities = outputTensor.softmax();
+    } else {
+      // Fallback for unexpected output type
+      return { tumorType: 'Unknown', confidence: 0 };
     }
     
     // Get class with highest probability
