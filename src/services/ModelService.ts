@@ -4,7 +4,7 @@ import { ImageProcessor } from './ImageProcessor';
 import { MockDataGenerator } from './MockDataGenerator';
 
 // Model constants
-// Update the model URL to a working TensorFlow.js model
+// Update to a working TensorFlow.js model URL (MobileNet)
 const MODEL_URL = 'https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_0.25_224/model.json';
 const IMAGE_SIZE = 224; // Standard size for medical image analysis models
 const MOCK_MODE = false; // Disable mock mode by default
@@ -48,9 +48,6 @@ class ModelService {
       // Configure for optimal performance
       await tf.setBackend('webgl');
       console.log('Using backend:', tf.getBackend());
-      
-      // Enable debugging if needed
-      // tf.env().set('DEBUG', true);
       
       console.log('Attempting to load model from:', MODEL_URL);
       
@@ -111,7 +108,7 @@ class ModelService {
       // Dispose of tensors to prevent memory leaks
       if (Array.isArray(result)) {
         result.forEach(tensor => tensor.dispose());
-      } else {
+      } else if (result instanceof tf.Tensor) {
         result.dispose();
       }
       dummyTensor.dispose();
@@ -155,7 +152,7 @@ class ModelService {
       
       // Fix TypeScript error by explicitly typing model prediction
       console.log('Running inference with input shape:', input.shape);
-      const outputTensor = this.model.predict(input);
+      const outputTensor = this.model.predict(input) as tf.Tensor | tf.Tensor[];
       
       // Process the model output to get tumor classification
       const { tumorType, confidence } = await this.processModelOutput(outputTensor);
