@@ -1,9 +1,10 @@
+
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileUp, X, Image, Check, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useModelService } from '@/services/modelService';
+import { useModelService } from '@/services/index';
 import { useNavigate } from 'react-router-dom';
 
 const UploadSection = () => {
