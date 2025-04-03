@@ -1,6 +1,6 @@
 
 import { useToast } from '@/hooks/use-toast';
-import ModelService from './ModelService';
+import ModelService from './modelService';
 
 // Hook for using model service in components
 export const useModelService = () => {

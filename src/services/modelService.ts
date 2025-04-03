@@ -1,5 +1,5 @@
 
-import ModelService from './ModelService';
+import ModelService from './modelService';
 import { useModelService } from './useModelService';
 
 export { useModelService };
